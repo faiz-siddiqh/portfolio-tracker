@@ -137,7 +137,7 @@ def main():
         # Validate CSV structure
         required_columns = ['Ticker', 'Shares', 'Avg. Cost Basis']
         if not all(col in df.columns for col in required_columns):
-            st.error(f"CSV missing required columns. Needed: {required_columns}")
+            st.error(f"CSV has missing required columns. Needed: {required_columns}")
             return
             
         # Clean data

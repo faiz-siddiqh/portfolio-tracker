@@ -2,10 +2,9 @@
 
 ## Description
 
-This project is a comprehensive tool designed to track and visualize portfolios of US stocks. It provides an interactive interface to analyze your stock holdings, calculate returns, and view portfolio allocations.
+This project is a comprehensive tool designed to track and visualize portfolios of US stocks , Indian Stocks and Overall Portfolio. It provides an interactive interface to analyze your stock holdings, calculate returns, and view portfolio allocations.
 
 **Future Updates:**
-- Support for tracking Indian stocks
 - Integration of cryptocurrency portfolios
 
 ## Features
@@ -50,8 +49,19 @@ This project is a comprehensive tool designed to track and visualize portfolios 
 
 Run the application using Streamlit:
 
+1. For US Stocks Overview 
 ```bash
 streamlit run us_stocks.py
+```
+
+2. For Indian Stocks Overview 
+```bash
+streamlit run indian_stocks.py
+```
+
+3. For Overall Portfolio Overview 
+```bash
+streamlit run portfolio_tracker.py
 ```
 
 This will start a local server and open the application in your default web browser.

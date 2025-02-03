@@ -19,8 +19,8 @@ This project is a comprehensive tool designed to track and visualize portfolios 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/us-portfolio-tracker.git
-   cd us-portfolio-tracker
+   git clone https://github.com/yourusername/portfolio-tracker.git
+   cd portfolio-tracker
    ```
 
 2. Install required dependencies:

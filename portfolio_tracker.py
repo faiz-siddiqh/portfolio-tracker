@@ -3,37 +3,53 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import time
 
-# Function to fetch stock data
-def fetch_stock_data(ticker):
-    try:
-        if not ticker:
-            raise ValueError("Empty ticker symbol provided")
+# Cache for fetched stock data
+stock_cache = {}
 
-        stock = yf.Ticker(ticker)
-        
-        # Fetch historical data
-        data = stock.history(period="1mo")
-        if data.empty:
-            raise ValueError(f"No historical data available for {ticker}")
-        
-        current_price = data['Close'].iloc[-1]
-        if pd.isnull(current_price):
-            raise ValueError("Invalid closing price received")
-            
-        # Get fundamental data
-        info = stock.info
-        pe_ratio = info.get('trailingPE', 'N/A')
-        
-        return {'current_price': current_price, 'pe_ratio': pe_ratio, 'error': None}
+# Function to fetch multiple stock prices at once
+def fetch_stock_prices(tickers, retries=3, delay=5):
+    global stock_cache
+    tickers = list(set(tickers))  # Remove duplicates
     
-    except Exception as e:
-        return {'current_price': None, 'pe_ratio': None, 'error': f"Error fetching {ticker}: {str(e)}"}
+    # Check cache first
+    missing_tickers = [t for t in tickers if t not in stock_cache]
+    
+    if not missing_tickers:
+        return {t: stock_cache[t] for t in tickers}
+
+    for attempt in range(retries):
+        try:
+            data = yf.download(missing_tickers, period="1mo")['Close']
+            
+            if data.empty:
+                raise ValueError("No historical data available")
+
+            latest_prices = data.iloc[-1].to_dict()
+
+            # Store in cache
+            for ticker, price in latest_prices.items():
+                stock_cache[ticker] = {"current_price": price, "error": None}
+
+            return {t: stock_cache[t] for t in tickers}
+
+        except Exception as e:
+            if "Too Many Requests" in str(e) and attempt < retries - 1:
+                st.warning(f"Rate limited. Retrying in {delay} seconds...")
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
+            else:
+                return {t: {"current_price": None, "error": str(e)} for t in tickers}
 
 # Function to fetch INR to USD exchange rate
 def get_inr_to_usd():
     try:
-        inr_to_usd = yf.Ticker("USDINR=X").history(period="1d")['Close'].iloc[-1]
+        data = yf.Ticker("USDINR=X").history(period="1d")
+        if data.empty:
+            raise ValueError("No exchange rate data available")
+        
+        inr_to_usd = data['Close'].iloc[-1]
         return 1 / inr_to_usd if inr_to_usd else None
     except Exception as e:
         st.error(f"Error fetching exchange rate: {str(e)}")
@@ -41,38 +57,43 @@ def get_inr_to_usd():
 
 # Function to calculate portfolio stats
 def calculate_portfolio(df, currency, conversion_rate):
+    tickers = df["Ticker"].str.strip().str.upper().tolist()
+    stock_data = fetch_stock_prices(tickers)
+
     total_value = 0
     valid_stocks = []
-    
-    for index, row in df.iterrows():
-        ticker = row['Ticker'].strip().upper()
-        shares = float(row['Shares'])
-        avg_cost_basis = float(row['Avg. Cost Basis'])
-        
-        stock_data = fetch_stock_data(ticker)
-        if stock_data['error']:
-            st.error(stock_data['error'])
+
+    for _, row in df.iterrows():
+        ticker = row["Ticker"].strip().upper()
+        shares = float(row["Shares"])
+        avg_cost_basis = float(row["Avg. Cost Basis"])
+
+        if shares <= 0 or avg_cost_basis <= 0:
+            st.error(f"Invalid data for {ticker}: Shares {shares}, Cost {avg_cost_basis}")
             continue
-        
-        current_price = stock_data['current_price']
-        pe_ratio = stock_data['pe_ratio']
-        
-        if current_price > 0:
-            market_value = current_price * shares * conversion_rate
-            return_percent = ((current_price - avg_cost_basis) / avg_cost_basis) * 100
-            total_value += market_value
-            
-            valid_stocks.append({
-                "Ticker": ticker,
-                "Shares": shares,
-                "Avg. Cost Basis": avg_cost_basis,
-                "Current Price (USD)": current_price * conversion_rate,
-                "Market Value (USD)": market_value,
-                "Return (%)": return_percent,
-                "P/E Ratio": pe_ratio,
-                "Currency": currency
-            })
-    
+
+        stock_info = stock_data.get(ticker, {})
+        current_price = stock_info.get("current_price")
+        error = stock_info.get("error")
+
+        if error:
+            st.error(f"Error fetching {ticker}: {error}")
+            continue
+
+        market_value = current_price * shares * conversion_rate
+        return_percent = ((current_price - avg_cost_basis) / avg_cost_basis) * 100
+        total_value += market_value
+
+        valid_stocks.append({
+            "Ticker": ticker,
+            "Shares": shares,
+            "Avg. Cost Basis": avg_cost_basis,
+            "Current Price (USD)": current_price * conversion_rate,
+            "Market Value (USD)": market_value,
+            "Return (%)": return_percent,
+            "Currency": currency
+        })
+
     return valid_stocks, total_value
 
 # Function to plot portfolio allocation
@@ -82,22 +103,21 @@ def plot_portfolio(portfolio):
         return
     
     df = pd.DataFrame(portfolio)
-    
+
     st.subheader("Portfolio Holdings")
     col1, col2 = st.columns(2)
-    
+
     half = len(df) // 2
     with col1:
         st.dataframe(df.iloc[:half].style.format({'Current Price (USD)': '${:.2f}', 'Market Value (USD)': '${:.2f}', 'Return (%)': '{:.2f}%'}))
     with col2:
         st.dataframe(df.iloc[half:].style.format({'Current Price (USD)': '${:.2f}', 'Market Value (USD)': '${:.2f}', 'Return (%)': '{:.2f}%'}))
-    
+
     st.subheader("Portfolio Allocation")
     fig = px.pie(df, values='Market Value (USD)', names='Ticker', hole=0.2, labels={'Ticker': 'Ticker'})
     fig.update_traces(textposition='inside', textinfo='percent+label')
     fig.update_traces(marker=dict(colors=px.colors.qualitative.Set2))
 
-    # Update layout BEFORE displaying the chart
     fig.update_layout(
         hovermode="x unified", 
         showlegend=True, 
@@ -106,43 +126,47 @@ def plot_portfolio(portfolio):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-
-
 # Main function
 def main():
     st.title("Global Portfolio Tracker (USD)")
-    
+
     # Fetch exchange rate
     inr_to_usd = get_inr_to_usd()
     if inr_to_usd is None:
         st.error("Failed to fetch INR to USD conversion rate.")
         return
-    
-    # Load Indian portfolio
-    indian_file_path = os.path.join(os.getcwd(), "indian_portfolio.csv")
-    us_file_path = os.path.join(os.getcwd(), "us_portfolio.csv")
-    
+
+    # Load portfolios
+    portfolio_files = [("indian_portfolio.csv", "INR", inr_to_usd), ("us_portfolio.csv", "USD", 1)]
     combined_portfolio = []
     total_usd_value = 0
-    
-    for file_path, currency, rate in [(indian_file_path, "INR", inr_to_usd), (us_file_path, "USD", 1)]:
+
+    for file_path, currency, rate in portfolio_files:
+        full_path = os.path.join(os.getcwd(), file_path)
+        
         try:
-            df = pd.read_csv(file_path)
-            df = df.dropna(subset=['Ticker'])
+            df = pd.read_csv(full_path).dropna(subset=["Ticker"])
+            
+            # Validate required columns
+            if not all(col in df.columns for col in ["Ticker", "Shares", "Avg. Cost Basis"]):
+                st.error(f"CSV file {file_path} is missing required columns.")
+                continue
+
             portfolio, total_value = calculate_portfolio(df, currency, rate)
             combined_portfolio.extend(portfolio)
             total_usd_value += total_value
+
         except FileNotFoundError:
             st.error(f"Portfolio CSV file not found: {file_path}")
         except Exception as e:
-            st.error(f"Error reading CSV file: {str(e)}")
-    
+            st.error(f"Error reading {file_path}: {str(e)}")
+
     # Display results
     if combined_portfolio:
         st.success(f"Total Portfolio Value: ${total_usd_value:,.2f}")
         plot_portfolio(combined_portfolio)
     else:
-        st.error("No valid stocks could be processed in the portfolio")
+        st.error("No valid stocks could be processed in the portfolio.")
 
 if __name__ == "__main__":
     main()

@@ -1,17 +1,16 @@
 # Portfolio Tracker
 
-![Global_portfolio_tracker](https://github.com/user-attachments/assets/7d39ff37-1f35-43da-a16d-8a358056540a)
+![Screenshot 2025-03-01 125609](https://github.com/user-attachments/assets/2037d0d2-4391-46d0-87cb-97d93e377ce1)
 
 ## Description
 
-This project is a comprehensive tool designed to track and visualize portfolios of US stocks , Indian Stocks and Overall Portfolio. It provides an interactive interface to analyze your stock holdings, calculate returns, and view portfolio allocations.
-
-**Future Updates:**
-- Integration of cryptocurrency portfolios
+This project is a comprehensive tool designed to track and visualize portfolios of US stocks , Indian Stocks, Mutual Funds , Crypto Holdings and Overall Portfolio. It provides an interactive interface to analyze your stock holdings, calculate returns, and view portfolio allocations.
 
 ## Features
 
 - Fetches real-time stock data using Yahoo Finance API
+- Fetches Mutual Holdings and calculates value of the holdings
+- Fetches Crypto assets value using Yahoo Finance API
 - Calculates portfolio value and individual stock returns
 - Visualizes portfolio allocation with interactive charts
 - Handles errors and data inconsistencies gracefully
@@ -37,6 +36,7 @@ This project is a comprehensive tool designed to track and visualize portfolios 
 - streamlit
 - pandas
 - plotly
+- requests
 
 ## Setup
 
@@ -46,6 +46,8 @@ This project is a comprehensive tool designed to track and visualize portfolios 
    - Avg. Cost Basis
 
 2. Add your stock holdings to the CSV file.
+3. Add mutual holding units based on scheme [fund] in `mutual_fund_portfolio.csv` in project directory
+4. Add Crypto Holdings in the csv `crypto_portfolio.csv` . NOTE: please check the correct tickers for Crypto on Yahoo Finance. 
 
 ## Usage
 
